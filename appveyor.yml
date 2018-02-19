@@ -1,0 +1,49 @@
+version: 1.0.{build}
+branches:
+  only:
+  - master
+
+environment:
+  access_token:
+    secure: fobixDQD25grTYnpd9bWQj1XaIOPihyKBJeVVPGcf3z8tn4KqYtVHkHDSpbq27ms
+
+image: Visual Studio 2017
+test: off
+
+before_build:
+- cmd: nuget restore ./StaticPageGeneration
+
+build:
+  verbosity: minimal
+
+after_build:
+- ps: .\StaticPageGeneration\bin\Debug\StaticPageGeneration.exe
+
+- git config --global credential.helper store
+- git config --global user.email %APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL%
+- git config --global user.name %APPVEYOR_REPO_COMMIT_AUTHOR%
+- ps: Add-Content "$env:USERPROFILE\.git-credentials" "https://$($env:access_token):x-oauth-basic@github.com`n"
+- cmd: cd protocol
+- git add .
+- git commit -m "Appveyor - Publish protocol documentation [skip ci]"
+- git push origin HEAD:master
+  # Note that we must tag our new commit so that the deploy stage
+  # publishes it instead of the commit that triggered the build.
+- ps: git tag OrgPages-ACE.$($env:appveyor_build_version)
+- git push origin --tags
+- ps: echo $($env:appveyor_build_version) > releaseversion.txt
+
+artifacts:
+    - path: protocol/
+      name: Protocol_Documentation-$(appveyor_build_version)
+      type: zip
+
+deploy:
+  release: OrgPages-ACE.$(appveyor_build_version)
+  description: 'Organization Pages'
+  provider: GitHub
+  auth_token:
+    secure: fobixDQD25grTYnpd9bWQj1XaIOPihyKBJeVVPGcf3z8tn4KqYtVHkHDSpbq27ms
+  artifact: Protocol_Documentation-$(appveyor_build_version).zip
+  draft: false
+  prerelease: false
